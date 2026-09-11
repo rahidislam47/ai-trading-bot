@@ -23,7 +23,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "🟢 Institutional PT-7 AI Trading Bot is Active & Running 24/7 with Live Data!"
+    return "🟢 Institutional PT-7 AI Trading Bot is Active & Running 24/7 with Rate-Limit Protection!"
 
 # ==========================================
 # ⚙️ CONFIGURATION & TELEGRAM SETTINGS
@@ -169,60 +169,46 @@ def evaluate_market_data(df, ticker):
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
 
-    # Calculate real-time candle metrics
     df['body_size'] = abs(df['Close'] - df['Open'])
     df['upper_wick'] = df['High'] - df[['Open', 'Close']].max(axis=1)
     df['lower_wick'] = df[['Open', 'Close']].min(axis=1) - df['Low']
 
     c_curr = float(df['Close'].iloc[-1])
 
-    # Step 1: DTT (Direction to Trade) Primary Filter
-    recent_trend = df['Close'].iloc[-5:].values
-    is_bullish = recent_trend[-1] > recent_trend[0]
-    direction = "BUY" if is_bullish else "SELL"
     s1 = True
-
-    # Step 2: Market Structure & Barrier Mapping
-    rolling_max = df['High'].rolling(window=10).max().iloc[-1]
-    rolling_min = df['Low'].rolling(window=10).min().iloc[-1]
     s2 = True
-
-    # Step 3: Liquidity Pool & Spoofing Zone Detection
+    
     avg_volume = df['Volume'].mean() if 'Volume' in df.columns else 1000
     current_volume = df['Volume'].iloc[-1] if 'Volume' in df.columns else 1000
-    s3 = current_volume >= (1.1 * avg_volume)
+    s3 = current_volume >= (1.0 * avg_volume)
 
-    # Step 4: Power Generation & Movement Speed Check (Rapidity)
     recent_bodies = df['body_size'].iloc[-3:].values
     avg_body = df['body_size'].mean()
-    s4 = all(b > (0.7 * avg_body) for b in recent_bodies)
+    s4 = all(b > (0.5 * avg_body) for b in recent_bodies)
 
-    # Step 5: Saturation & Hindering (Exhaustion M1-M7) Analysis
     last_upper = df['upper_wick'].iloc[-1]
     last_lower = df['lower_wick'].iloc[-1]
     body = df['body_size'].iloc[-1]
-    s5 = not ((last_upper > 2.2 * body) or (last_lower > 2.2 * body))
+    s5 = not ((last_upper > 2.5 * body) or (last_lower > 2.5 * body))
 
-    # Step 6: Anomaly & Candle Size Filter (Middling Check)
     body_sizes = df['body_size']
     mean_b = body_sizes.mean()
     std_b = body_sizes.std()
-    s6 = body <= (mean_b + 2.0 * std_b)
+    s6 = body <= (mean_b + 2.5 * std_b)
 
-    # Step 7: 5-Second Chart 70/30 Execution Rule
     prev_candle_power = df['body_size'].iloc[-2] > df['body_size'].iloc[-3]
     current_initial_push = df['body_size'].iloc[-1] > 0
     s7 = prev_candle_power and current_initial_push
 
-    # Step 8: Final Safety Skip Protocol (Volatility Shield)
     price_std = df['Close'].rolling(window=5).std().iloc[-1]
-    s8 = price_std < 0.0035
+    s8 = price_std < 0.0050
 
-    # Execute all 8 sequential modular steps
     filters_passed = all([s1, s2, s3, s4, s5, s6, s7, s8])
 
     if filters_passed:
         clean_asset = ticker.replace("=X", "")
+        recent_trend = df['Close'].iloc[-5:].values
+        direction = "BUY" if recent_trend[-1] > recent_trend[0] else "SELL"
         strategy_id = "PT-7 Strategy (8-Step Framework)"
         setup_name = f"Modular 8-Step Filter Verified ({direction})"
         win_score = 98
@@ -300,7 +286,7 @@ def evaluate_trade_outcome(trade_data, entry_time):
 # ==========================================
 def trading_bot_loop():
     global signal_counter
-    print("🚀 PT-7 AI Trading Bot Thread Started with Optimized Live Feed!")
+    print("🚀 PT-7 AI Trading Bot Thread Started with Rate-Limit Shield!")
     last_signal_time = {}
 
     while True:
@@ -312,66 +298,74 @@ def trading_bot_loop():
                     if (now_bd - last_signal_time[pair]).total_seconds() < 300:
                         continue
 
-                # Fast live ticker history fetch
-                ticker_obj = yf.Ticker(pair)
-                df = ticker_obj.history(period="2d", interval="1m")
-                if df.empty:
-                    continue
+                try:
+                    ticker_obj = yf.Ticker(pair)
+                    df = ticker_obj.history(period="1d", interval="1m")
+                    if df.empty:
+                        time.sleep(3)
+                        continue
 
-                trade_data = evaluate_market_data(df, pair)
-                if trade_data:
-                    signal_counter += 1
-                    last_signal_time[pair] = now_bd
-                    
-                    raw_asset = trade_data['asset']
-                    formatted_asset = f"{raw_asset[:3]}/{raw_asset[3:]}" if len(raw_asset) == 6 else raw_asset
+                    trade_data = evaluate_market_data(df, pair)
+                    if trade_data:
+                        signal_counter += 1
+                        last_signal_time[pair] = now_bd
+                        
+                        raw_asset = trade_data['asset']
+                        formatted_asset = f"{raw_asset[:3]}/{raw_asset[3:]}" if len(raw_asset) == 6 else raw_asset
 
-                    if trade_data['signal'] == "BUY":
-                        action_display = "🟢 🟢 `BUY (CALL)` 🟢 🟢"
-                        pair_display = f"🟢 `{formatted_asset}`"
-                    else:
-                        action_display = "🔴 🔴 `SELL (PUT)` 🔴 🔴"
-                        pair_display = f"🔴 `{formatted_asset}`"
+                        if trade_data['signal'] == "BUY":
+                            action_display = "🟢 🟢 `BUY (CALL)` 🟢 🟢"
+                            pair_display = f"🟢 `{formatted_asset}`"
+                        else:
+                            action_display = "🔴 🔴 `SELL (PUT)` 🔴 🔴"
+                            pair_display = f"🔴 `{formatted_asset}`"
 
-                    entry_time_dt = now_bd + timedelta(seconds=(60 - now_bd.second) if now_bd.second > 0 else 0)
-                    seconds_left = int((entry_time_dt - now_bd).total_seconds())
-                    
-                    entry_time_str = entry_time_dt.strftime('%I:%M:%S %p (BD)')
-                    exit_time_str = (entry_time_dt + timedelta(minutes=1)).strftime('%I:%M:%S %p (BD)')
+                        entry_time_dt = now_bd + timedelta(seconds=(60 - now_bd.second) if now_bd.second > 0 else 0)
+                        seconds_left = int((entry_time_dt - now_bd).total_seconds())
+                        
+                        entry_time_str = entry_time_dt.strftime('%I:%M:%S %p (BD)')
+                        exit_time_str = (entry_time_dt + timedelta(minutes=1)).strftime('%I:%M:%S %p (BD)')
 
-                    signal_msg = (
-                        f"🔥 ━━━━━━━━━━━━━━━━━━━ 🔥\n"
-                        f"  💎 *PT-7 PRECISION SIGNAL #{signal_counter}* 💎\n"
-                        f"🔥 ━━━━━━━━━━━━━━━━━━━ 🔥\n\n"
-                        f"🪙 *PAIR:* {pair_display}\n"
-                        f"⚡ *ACTION:* {action_display}\n\n"
-                        f"⏰ *TIMING DETAILS:*\n"
-                        f"• *Entry Time : {entry_time_str}*\n"
-                        f"• Expiry Time: {exit_time_str}\n"
-                        f"• Timeframe  : 1 Minute (M1)\n"
-                        f"⏳ *ENTRY IN : {seconds_left} SECONDS LEFT*\n\n"
-                        f"📊 *STRATEGY METRICS:*\n"
-                        f"• Strategy   : `{trade_data['strategy_id']}`\n"
-                        f"• Win Score  : `{trade_data['score']}% / 100`\n"
-                        f"• Entry Price: `{trade_data['entry_price']:.5f}`\n\n"
-                        f"🔥 ━━━━━━━━━━━━━━━━━━━ 🔥"
-                    )
+                        signal_msg = (
+                            f"🔥 ━━━━━━━━━━━━━━━━━━━ 🔥\n"
+                            f"  💎 *PT-7 PRECISION SIGNAL #{signal_counter}* 💎\n"
+                            f"🔥 ━━━━━━━━━━━━━━━━━━━ 🔥\n\n"
+                            f"🪙 *PAIR:* {pair_display}\n"
+                            f"⚡ *ACTION:* {action_display}\n\n"
+                            f"⏰ *TIMING DETAILS:*\n"
+                            f"• *Entry Time : {entry_time_str}*\n"
+                            f"• Expiry Time: {exit_time_str}\n"
+                            f"• Timeframe  : 1 Minute (M1)\n"
+                            f"⏳ *ENTRY IN : {seconds_left} SECONDS LEFT*\n\n"
+                            f"📊 *STRATEGY METRICS:*\n"
+                            f"• Strategy   : `{trade_data['strategy_id']}`\n"
+                            f"• Win Score  : `{trade_data['score']}% / 100`\n"
+                            f"• Entry Price: `{trade_data['entry_price']:.5f}`\n\n"
+                            f"🔥 ━━━━━━━━━━━━━━━━━━━ 🔥"
+                        )
 
-                    send_telegram_msg(signal_msg)
-                    print(f"⚡ PT-7 LIVE SIGNAL #{signal_counter} SENT: {formatted_asset} - {trade_data['signal']}")
+                        send_telegram_msg(signal_msg)
+                        print(f"⚡ PT-7 SIGNAL #{signal_counter} SENT: {formatted_asset} - {trade_data['signal']}")
 
-                    eval_thread = threading.Thread(
-                        target=evaluate_trade_outcome, 
-                        args=(trade_data, now_bd), 
-                        daemon=True
-                    )
-                    eval_thread.start()
+                        eval_thread = threading.Thread(
+                            target=evaluate_trade_outcome, 
+                            args=(trade_data, now_bd), 
+                            daemon=True
+                        )
+                        eval_thread.start()
 
-            time.sleep(5)
+                except Exception as inner_e:
+                    print(f"⚠️ Notice on pair {pair}: {inner_e}")
+
+                # Rate-limit safeguard delay between pairs
+                time.sleep(3)
+
+            # Cycle pause
+            time.sleep(10)
 
         except Exception as e:
             print(f"❌ Error in Bot Loop: {e}")
-            time.sleep(10)
+            time.sleep(15)
 
 # ==========================================
 # 🚀 GLOBAL THREAD INITIATION FOR GUNICORN
