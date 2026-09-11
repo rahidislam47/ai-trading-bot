@@ -28,8 +28,8 @@ def home():
 # ==========================================
 # ⚙️ CONFIGURATION & TELEGRAM SETTINGS
 # ==========================================
-TELEGRAM_BOT_TOKEN = "7953282245:AAGUjSAnY3p-vG3q7Gj214m0S4e4J33J32Y"  # Your Telegram Token
-TELEGRAM_CHAT_ID = "-1002271833894"                      # Your Channel/Group Chat ID
+TELEGRAM_BOT_TOKEN = "7953282245:AAGUjSAnY3p-vG3q7Gj214m0S4e4J33J32Y"  # আপনার বটের টোকেন ঠিক আছে তো?
+TELEGRAM_CHAT_ID = "-1002271833894"                      # আপনার চ্যানেলের চ্যাট আইডি সঠিক কি না?
 
 PAIRS = [
     "EURUSD=X", "GBPUSD=X", "USDJPY=X", "AUDUSD=X", "USDCAD=X",
