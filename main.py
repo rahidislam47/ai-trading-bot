@@ -28,7 +28,7 @@ def home():
 # ==========================================
 # ⚙️ CONFIGURATION & TELEGRAM SETTINGS
 # ==========================================
-TELEGRAM_BOT_TOKEN = "8554753865:AAEzsaFTVFBXT2xKv-bwrA4Mu_Csf0YzA2A"  # আপনার বটের টোকেন ঠিক আছে তো?
+TELEGRAM_BOT_TOKEN = "8554753865:AAGP5RaDcJNVpskQ-WLraohWrIbooGYlZcY"  # আপনার বটের টোকেন ঠিক আছে তো?
 TELEGRAM_CHAT_ID = "-1002271833894"                      # আপনার চ্যানেলের চ্যাট আইডি সঠিক কি না?
 
 PAIRS = [
