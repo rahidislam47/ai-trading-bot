@@ -94,7 +94,6 @@ def generate_performance_analytics():
     overall_losses = sum(1 for r in rows if "LOSS" in r[1])
     overall_winrate = (overall_wins / total_trades) * 100 if total_trades > 0 else 0
 
-    # Group statistics by strategy
     strategy_stats = {}
     for strat_id, result in rows:
         if strat_id not in strategy_stats:
@@ -194,36 +193,36 @@ def evaluate_market_data(df, ticker):
 
     # Strategy 1: Trend Momentum Scalp
     if ema8.iloc[-1] > ema21.iloc[-1] and ema8.iloc[-2] <= ema21.iloc[-2] and c_curr > ema50.iloc[-1] and rsi_val > 52:
-        signal = "BUY (CALL / UP)"
+        signal = "BUY"
         strategy_id = "Strategy 1 (EMA Cross)"
         setup_name = f"EMA8/21 Bull Cross + HTF Trend + RSI ({rsi_val:.1f})"
         win_score = 88
     elif ema8.iloc[-1] < ema21.iloc[-1] and ema8.iloc[-2] >= ema21.iloc[-2] and c_curr < ema50.iloc[-1] and rsi_val < 48:
-        signal = "SELL (PUT / DOWN)"
+        signal = "SELL"
         strategy_id = "Strategy 1 (EMA Cross)"
         setup_name = f"EMA8/21 Bear Cross + HTF Trend + RSI ({rsi_val:.1f})"
         win_score = 88
 
     # Strategy 2: Institutional Engulfing Breakout
     elif c_prev < o_prev and c_curr > o_curr and c_curr > o_prev and (c_curr - o_curr) > (o_prev - c_prev) * 1.2 and rsi_val > 50:
-        signal = "BUY (CALL / UP)"
+        signal = "BUY"
         strategy_id = "Strategy 2 (Engulfing)"
         setup_name = "Bullish Institutional Engulfing Pattern"
         win_score = 87
     elif c_prev > o_prev and c_curr < o_curr and c_curr < o_prev and (o_curr - c_curr) > (c_prev - o_prev) * 1.2 and rsi_val < 50:
-        signal = "SELL (PUT / DOWN)"
+        signal = "SELL"
         strategy_id = "Strategy 2 (Engulfing)"
         setup_name = "Bearish Institutional Engulfing Pattern"
         win_score = 87
 
     # Strategy 3: Micro S/R Level Bounce
     elif l_curr <= low.iloc[-20:-1].min() and c_curr > o_curr and rsi_val < 35:
-        signal = "BUY (CALL / UP)"
+        signal = "BUY"
         strategy_id = "Strategy 3 (S/R Bounce)"
         setup_name = f"Support Zone Rejection at {l_curr:.5f}"
         win_score = 86
     elif h_curr >= high.iloc[-20:-1].max() and c_curr < o_curr and rsi_val > 65:
-        signal = "SELL (PUT / DOWN)"
+        signal = "SELL"
         strategy_id = "Strategy 3 (S/R Bounce)"
         setup_name = f"Resistance Zone Rejection at {h_curr:.5f}"
         win_score = 86
@@ -262,7 +261,7 @@ def evaluate_trade_outcome(trade_data, entry_time):
         exit_p = float(df_after['Close'].iloc[-1])
         
         is_win = False
-        if "BUY" in signal:
+        if signal == "BUY":
             is_win = exit_p > entry_p
         else:
             is_win = exit_p < entry_p
@@ -316,31 +315,39 @@ def trading_bot_loop():
                 if trade_data:
                     last_signal_time[pair] = now_bd
                     
-                    # Formatting Pair Name (e.g., USDCHF -> USD/CHF)
                     raw_asset = trade_data['asset']
                     formatted_asset = f"{raw_asset[:3]}/{raw_asset[3:]}" if len(raw_asset) == 6 else raw_asset
 
-                    # Action button formatting
-                    if "BUY" in trade_data['signal']:
-                        action_btn = "🟢🟢 BUY / CALL 🟢🟢"
+                    # Perfect Block Button Design
+                    if trade_data['signal'] == "BUY":
+                        action_block = (
+                            "🟩🟩🟩🟩🟩🟩🟩🟩🟩\n"
+                            "🟩🟩   *BUY (UP)*   🟩🟩\n"
+                            "🟩🟩🟩🟩🟩🟩🟩🟩🟩"
+                        )
                     else:
-                        action_btn = "🔴🔴 SELL / PUT 🔴🔴"
+                        action_block = (
+                            "🟥🟥🟥🟥🟥🟥🟥🟥🟥\n"
+                            "🟥🟥  *SELL (DOWN)*  🟥🟥\n"
+                            "🟥🟥🟥🟥🟥🟥🟥🟥🟥"
+                        )
 
-                    # Timing calculations
+                    # Timing Calculations
                     entry_time_dt = now_bd + timedelta(seconds=(60 - now_bd.second) if now_bd.second > 0 else 0)
                     seconds_left = int((entry_time_dt - now_bd).total_seconds())
                     
                     entry_time_str = entry_time_dt.strftime('%I:%M:%S %p')
                     exit_time_str = (entry_time_dt + timedelta(minutes=1)).strftime('%I:%M:%S %p')
 
-                    # Clean Signal Message Template
+                    # Highly Prominent Countdown & Clean Signal Card
                     signal_msg = (
                         f"⚡ *NEW AI TRADE SIGNAL* ⚡\n"
                         f"━━━━━━━━━━━━━━━━━━━━━\n\n"
-                        f"🪙 *PAIR:* `#${formatted_asset}`\n"
-                        f"🎯 *ACTION:* `{action_btn}`\n\n"
+                        f"⏳ *GET READY: ENTRY IN `{seconds_left} SECONDS`* ⏳\n\n"
+                        f"🪙 *PAIR:* `#${formatted_asset}`\n\n"
+                        f"🎯 *ACTION:* \n"
+                        f"{action_block}\n\n"
                         f"⏱️ *CANDLE TIME:* `1 MINUTE`\n"
-                        f"⏳ *ENTRY IN:* `{seconds_left} SECONDS`\n"
                         f"⏰ *ENTRY AT:* `{entry_time_str}`\n"
                         f"🏁 *EXPIRY:* `{exit_time_str}`\n\n"
                         f"📊 *STRATEGY:* `{trade_data['strategy_id']}`\n"
