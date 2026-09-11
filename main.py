@@ -276,10 +276,12 @@ def evaluate_trade_outcome(trade_data, entry_time):
             result_str, reason_str
         )
 
+        formatted_asset = f"{asset[:3]}/{asset[3:]}" if len(asset) == 6 else asset
+
         feedback_msg = (
             f"🎯 *TRADE OUTCOME FEEDBACK*\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
-            f"🪙 *ASSET:* `{asset}`\n"
+            f"🪙 *PAIR:* `#${formatted_asset}`\n"
             f"🎯 *STRATEGY:* `{trade_data['strategy_id']}`\n"
             f"📊 *RESULT:* `{result_str}`\n"
             f"📈 *Entry:* `{entry_p:.5f}` ➔ *Exit:* `{exit_p:.5f}`\n\n"
@@ -300,8 +302,6 @@ def trading_bot_loop():
     while True:
         try:
             now_bd = datetime.now(timezone.utc) + timedelta(hours=6)
-            current_time_str = now_bd.strftime('%I:%M:%S %p')
-            print(f"[{current_time_str}] 🔍 Scanning Forex Pairs ({len(PAIRS)} Assets)...")
 
             for pair in PAIRS:
                 if pair in last_signal_time:
@@ -316,27 +316,40 @@ def trading_bot_loop():
                 if trade_data:
                     last_signal_time[pair] = now_bd
                     
-                    entry_time_str = now_bd.strftime('%I:%M:%00 %p')
-                    exit_time_str = (now_bd + timedelta(minutes=1)).strftime('%I:%M:%00 %p')
+                    # Formatting Pair Name (e.g., USDCHF -> USD/CHF)
+                    raw_asset = trade_data['asset']
+                    formatted_asset = f"{raw_asset[:3]}/{raw_asset[3:]}" if len(raw_asset) == 6 else raw_asset
 
+                    # Action button formatting
+                    if "BUY" in trade_data['signal']:
+                        action_btn = "🟢🟢 BUY / CALL 🟢🟢"
+                    else:
+                        action_btn = "🔴🔴 SELL / PUT 🔴🔴"
+
+                    # Timing calculations
+                    entry_time_dt = now_bd + timedelta(seconds=(60 - now_bd.second) if now_bd.second > 0 else 0)
+                    seconds_left = int((entry_time_dt - now_bd).total_seconds())
+                    
+                    entry_time_str = entry_time_dt.strftime('%I:%M:%S %p')
+                    exit_time_str = (entry_time_dt + timedelta(minutes=1)).strftime('%I:%M:%S %p')
+
+                    # Clean Signal Message Template
                     signal_msg = (
-                        f"🔥 *HIGH CONFLUENCE AI TRADE SIGNAL* 🔥\n"
-                        f"━━━━━━━━━━━━━━━━━━━━━\n"
-                        f"🪙 *ASSET:* `{trade_data['asset']}`\n"
-                        f"🎯 *STRATEGY:* `{trade_data['strategy_id']}`\n"
-                        f"🔴🟢 *ACTION:* `{trade_data['signal']}`\n\n"
-                        f"⏰ *TIMING & EXPIRY:*\n"
-                        f"• Entry Time: `{entry_time_str} (BD Time)`\n"
-                        f"• Candle Time: `1 Minute`\n"
-                        f"• Exit / Expiry: `{exit_time_str}`\n\n"
-                        f"📊 *DETAILS:*\n"
-                        f"• Setup: `{trade_data['setup']}`\n"
-                        f"• Win Score: `{trade_data['score']}% / 100`\n"
-                        f"• Entry Price: `{trade_data['entry_price']:.5f}`"
+                        f"⚡ *NEW AI TRADE SIGNAL* ⚡\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━\n\n"
+                        f"🪙 *PAIR:* `#${formatted_asset}`\n"
+                        f"🎯 *ACTION:* `{action_btn}`\n\n"
+                        f"⏱️ *CANDLE TIME:* `1 MINUTE`\n"
+                        f"⏳ *ENTRY IN:* `{seconds_left} SECONDS`\n"
+                        f"⏰ *ENTRY AT:* `{entry_time_str}`\n"
+                        f"🏁 *EXPIRY:* `{exit_time_str}`\n\n"
+                        f"📊 *STRATEGY:* `{trade_data['strategy_id']}`\n"
+                        f"🎯 *WIN SCORE:* `{trade_data['score']}%` | Price: `{trade_data['entry_price']:.5f}`\n"
+                        f"━━━━━━━━━━━━━━━━━━━━━"
                     )
 
                     send_telegram_msg(signal_msg)
-                    print(f"⚡ SIGNAL GENERATED: {trade_data['asset']} - {trade_data['signal']}")
+                    print(f"⚡ SIGNAL SENT: {formatted_asset} - {trade_data['signal']}")
 
                     eval_thread = threading.Thread(
                         target=evaluate_trade_outcome, 
