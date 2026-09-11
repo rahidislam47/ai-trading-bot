@@ -4,7 +4,8 @@
 
 import warnings
 warnings.simplefilter(action='ignore', category=FutureWarning)
-
+import sys
+sys.stdout.reconfigure(line_buffering=True)
 import os
 import yfinance as yf
 import pandas as pd
