@@ -23,7 +23,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "🟢 Institutional PT-7 AI Trading Bot is Active & Running 24/7 with Rate-Limit Protection!"
+    return "🟢 Institutional PT-7 AI Trading Bot is Active & Running 24/7 with Cycle Logs!"
 
 # ==========================================
 # ⚙️ CONFIGURATION & TELEGRAM SETTINGS
@@ -286,12 +286,13 @@ def evaluate_trade_outcome(trade_data, entry_time):
 # ==========================================
 def trading_bot_loop():
     global signal_counter
-    print("🚀 PT-7 AI Trading Bot Thread Started with Rate-Limit Shield!")
+    print("🚀 PT-7 AI Trading Bot Thread Started with Cycle Scan Logs!")
     last_signal_time = {}
 
     while True:
         try:
             now_bd = datetime.now(timezone.utc) + timedelta(hours=6)
+            print(f"🔄 Starting new scan cycle for all 15 currency pairs...")
 
             for pair in PAIRS:
                 if pair in last_signal_time:
@@ -357,10 +358,9 @@ def trading_bot_loop():
                 except Exception as inner_e:
                     print(f"⚠️ Notice on pair {pair}: {inner_e}")
 
-                # Rate-limit safeguard delay between pairs
                 time.sleep(3)
 
-            # Cycle pause
+            print(f"✅ Full 15-pair cycle completed. Waiting for next cycle...")
             time.sleep(10)
 
         except Exception as e:
