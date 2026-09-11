@@ -37,8 +37,9 @@ PAIRS = [
     "USDCHF=X", "EURAUD=X", "GBPAUD=X", "GBPCAD=X", "EURNZD=X"
 ]
 
-# Database Lock for multi-threaded safety
+# Database Lock & Global Signal Counter
 db_lock = threading.Lock()
+signal_counter = 0
 
 # ==========================================
 # 💾 DATABASE MANAGEMENT & MEMORY SYSTEM
@@ -67,7 +68,7 @@ def init_db():
 init_db()
 
 def log_trade_to_db(asset, strat_id, signal_type, entry_p, exit_p, score, result, reason):
-    now_bd = (datetime.now(timezone.utc) + timedelta(hours=6)).strftime('%Y-%m-%d %I:%M:%S %p')
+    now_bd = (datetime.now(timezone.utc) + timedelta(hours=6)).strftime('%Y-%m-%d %I:%M:%S %p (BD)')
     with db_lock:
         conn = sqlite3.connect('trading_memory.db', check_same_thread=False)
         cursor = conn.cursor()
@@ -78,21 +79,24 @@ def log_trade_to_db(asset, strat_id, signal_type, entry_p, exit_p, score, result
         conn.commit()
         conn.close()
 
-def generate_performance_analytics():
+# ==========================================
+# 📊 TEN TRADES ANALYSIS REPORT
+# ==========================================
+def generate_ten_trades_analysis():
     with db_lock:
         conn = sqlite3.connect('trading_memory.db', check_same_thread=False)
         cursor = conn.cursor()
-        cursor.execute("SELECT strategy_id, result FROM trade_outcomes")
+        cursor.execute("SELECT strategy_id, result FROM trade_outcomes ORDER BY id DESC LIMIT 10")
         rows = cursor.fetchall()
         conn.close()
 
     if not rows:
-        return "📊 *Performance Memory:* No trades logged in current session."
+        return None
 
-    total_trades = len(rows)
-    overall_wins = sum(1 for r in rows if "WIN" in r[1])
-    overall_losses = sum(1 for r in rows if "LOSS" in r[1])
-    overall_winrate = (overall_wins / total_trades) * 100 if total_trades > 0 else 0
+    total_last_10 = len(rows)
+    wins = sum(1 for r in rows if "WIN" in r[1])
+    losses = sum(1 for r in rows if "LOSS" in r[1])
+    winrate = (wins / total_last_10) * 100 if total_last_10 > 0 else 0
 
     strategy_stats = {}
     for strat_id, result in rows:
@@ -104,27 +108,36 @@ def generate_performance_analytics():
         else:
             strategy_stats[strat_id]["losses"] += 1
 
-    report = f"📊 *INSTITUTIONAL AI MEMORY REPORT*\n"
-    report += f"━━━━━━━━━━━━━━━━━━━━━\n"
-    report += f"📈 *OVERALL PERFORMANCE:*\n"
-    report += f"• Total Executions: `{total_trades}`\n"
-    report += f"• Win Rate: `{overall_winrate:.1f}%` (Wins: {overall_wins} | Losses: {overall_losses})\n\n"
-    report += f"🧠 *STRATEGY BREAKDOWN:*\n"
+    # Find Top Performing Strategy
+    best_strat = "N/A"
+    best_wins = -1
+    for strat, data in strategy_stats.items():
+        if data["wins"] > best_wins:
+            best_wins = data["wins"]
+            best_strat = strat
+
+    report = (
+        f"🔥 ━━━━━━━━━━━━━━━━━━━ 🔥\n"
+        f"    📊 *TEN TRADES ANALYSIS* 📊\n"
+        f"🔥 ━━━━━━━━━━━━━━━━━━━ 🔥\n\n"
+        f"📈 *LAST 10 TRADES SUMMARY:*\n"
+        f"• Total Executions: `{total_last_10}`\n"
+        f"• Accuracy Win Rate: `{winrate:.0f}%` (Wins: {wins} 🟢 | Losses: {losses} 🔴)\n\n"
+        f"🎯 *MOST ACCURATE STRATEGY:*\n"
+        f"• `{best_strat}` ({best_wins} Wins)\n\n"
+        f"🧠 *STRATEGY USAGE BREAKDOWN:*\n"
+    )
 
     for strat, data in strategy_stats.items():
         st_total = data["total"]
         st_wins = data["wins"]
         st_losses = data["losses"]
         st_wr = (st_wins / st_total) * 100 if st_total > 0 else 0
+        status_icon = "🟢" if st_wr >= 50 else "🔴"
         
-        status_icon = "🟢" if st_wr >= 60 else "🔴"
-        
-        report += (
-            f"\n{status_icon} *{strat}*\n"
-            f"   • Total Trades: `{st_total}`\n"
-            f"   • Win Rate: `{st_wr:.1f}%` (W: `{st_wins}` | L: `{st_losses}`)\n"
-        )
+        report += f"• {status_icon} *{strat}:* `{st_wins}/{st_total} Win` ({st_wr:.0f}%)\n"
 
+    report += f"\n🔥 ━━━━━━━━━━━━━━━━━━━ 🔥"
     return report
 
 # ==========================================
@@ -280,13 +293,19 @@ def evaluate_trade_outcome(trade_data, entry_time):
         feedback_msg = (
             f"🎯 *TRADE OUTCOME FEEDBACK*\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
-            f"🪙 *PAIR:* `#${formatted_asset}`\n"
+            f"🪙 *PAIR:* `{formatted_asset}`\n"
             f"🎯 *STRATEGY:* `{trade_data['strategy_id']}`\n"
             f"📊 *RESULT:* `{result_str}`\n"
-            f"📈 *Entry:* `{entry_p:.5f}` ➔ *Exit:* `{exit_p:.5f}`\n\n"
-            f"{generate_performance_analytics()}"
+            f"📈 *Entry:* `{entry_p:.5f}` ➔ *Exit:* `{exit_p:.5f}`"
         )
         send_telegram_msg(feedback_msg)
+
+        # Check if 10 trades analysis needs to be sent
+        if signal_counter % 10 == 0:
+            time.sleep(5)
+            analysis_msg = generate_ten_trades_analysis()
+            if analysis_msg:
+                send_telegram_msg(analysis_msg)
 
     except Exception as e:
         print(f"❌ Error verifying trade outcome: {e}")
@@ -295,6 +314,7 @@ def evaluate_trade_outcome(trade_data, entry_time):
 # 🔄 MAIN BACKGROUND SCANNER LOOP
 # ==========================================
 def trading_bot_loop():
+    global signal_counter
     print("🚀 Institutional AI Bot Thread Started & Active!")
     last_signal_time = {}
 
@@ -313,50 +333,48 @@ def trading_bot_loop():
 
                 trade_data = evaluate_market_data(df, pair)
                 if trade_data:
+                    signal_counter += 1
                     last_signal_time[pair] = now_bd
                     
                     raw_asset = trade_data['asset']
                     formatted_asset = f"{raw_asset[:3]}/{raw_asset[3:]}" if len(raw_asset) == 6 else raw_asset
 
-                    # Perfect Block Button Design
+                    # Dynamic Action & Pair Formatting
                     if trade_data['signal'] == "BUY":
-                        action_block = (
-                            "🟩🟩🟩🟩🟩🟩🟩🟩🟩\n"
-                            "🟩🟩   *BUY (UP)*   🟩🟩\n"
-                            "🟩🟩🟩🟩🟩🟩🟩🟩🟩"
-                        )
+                        action_display = "🟢 🟢 `BUY (CALL)` 🟢 🟢"
+                        pair_display = f"🟢 `{formatted_asset}`"
                     else:
-                        action_block = (
-                            "🟥🟥🟥🟥🟥🟥🟥🟥🟥\n"
-                            "🟥🟥  *SELL (DOWN)*  🟥🟥\n"
-                            "🟥🟥🟥🟥🟥🟥🟥🟥🟥"
-                        )
+                        action_display = "🔴 🔴 `SELL (PUT)` 🔴 🔴"
+                        pair_display = f"🔴 `{formatted_asset}`"
 
                     # Timing Calculations
                     entry_time_dt = now_bd + timedelta(seconds=(60 - now_bd.second) if now_bd.second > 0 else 0)
                     seconds_left = int((entry_time_dt - now_bd).total_seconds())
                     
-                    entry_time_str = entry_time_dt.strftime('%I:%M:%S %p')
-                    exit_time_str = (entry_time_dt + timedelta(minutes=1)).strftime('%I:%M:%S %p')
+                    entry_time_str = entry_time_dt.strftime('%I:%M:%S %p (BD)')
+                    exit_time_str = (entry_time_dt + timedelta(minutes=1)).strftime('%I:%M:%S %p (BD)')
 
-                    # Highly Prominent Countdown & Clean Signal Card
+                    # Final Dynamic Signal Layout
                     signal_msg = (
-                        f"⚡ *NEW AI TRADE SIGNAL* ⚡\n"
-                        f"━━━━━━━━━━━━━━━━━━━━━\n\n"
-                        f"⏳ *GET READY: ENTRY IN `{seconds_left} SECONDS`* ⏳\n\n"
-                        f"🪙 *PAIR:* `#${formatted_asset}`\n\n"
-                        f"🎯 *ACTION:* \n"
-                        f"{action_block}\n\n"
-                        f"⏱️ *CANDLE TIME:* `1 MINUTE`\n"
-                        f"⏰ *ENTRY AT:* `{entry_time_str}`\n"
-                        f"🏁 *EXPIRY:* `{exit_time_str}`\n\n"
-                        f"📊 *STRATEGY:* `{trade_data['strategy_id']}`\n"
-                        f"🎯 *WIN SCORE:* `{trade_data['score']}%` | Price: `{trade_data['entry_price']:.5f}`\n"
-                        f"━━━━━━━━━━━━━━━━━━━━━"
+                        f"🔥 ━━━━━━━━━━━━━━━━━━━ 🔥\n"
+                        f"  💎 *REAL MARKET BINARY SIGNAL #{signal_counter}* 💎\n"
+                        f"🔥 ━━━━━━━━━━━━━━━━━━━ 🔥\n\n"
+                        f"🪙 *PAIR:* {pair_display}\n"
+                        f"⚡ *ACTION:* {action_display}\n\n"
+                        f"⏰ *TIMING DETAILS:*\n"
+                        f"• *Entry Time : {entry_time_str}*\n"
+                        f"• Expiry Time: {exit_time_str}\n"
+                        f"• Timeframe  : 1 Minute (M1)\n"
+                        f"⏳ *ENTRY IN : {seconds_left} SECONDS LEFT*\n\n"
+                        f"📊 *STRATEGY METRICS:*\n"
+                        f"• Strategy   : `{trade_data['strategy_id']}`\n"
+                        f"• Win Score  : `{trade_data['score']}% / 100`\n"
+                        f"• Entry Price: `{trade_data['entry_price']:.5f}`\n\n"
+                        f"🔥 ━━━━━━━━━━━━━━━━━━━ 🔥"
                     )
 
                     send_telegram_msg(signal_msg)
-                    print(f"⚡ SIGNAL SENT: {formatted_asset} - {trade_data['signal']}")
+                    print(f"⚡ SIGNAL #{signal_counter} SENT: {formatted_asset} - {trade_data['signal']}")
 
                     eval_thread = threading.Thread(
                         target=evaluate_trade_outcome, 
