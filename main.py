@@ -23,7 +23,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "🟢 Institutional PT-7 AI Trading Bot is Active & Running 24/7 on Cloud!"
+    return "🟢 Institutional PT-7 AI Trading Bot is Active & Running 24/7 with Live Data!"
 
 # ==========================================
 # ⚙️ CONFIGURATION & TELEGRAM SETTINGS
@@ -169,7 +169,7 @@ def evaluate_market_data(df, ticker):
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
 
-    # Calculate fundamental metrics for candles
+    # Calculate real-time candle metrics
     df['body_size'] = abs(df['Close'] - df['Open'])
     df['upper_wick'] = df['High'] - df[['Open', 'Close']].max(axis=1)
     df['lower_wick'] = df[['Open', 'Close']].min(axis=1) - df['Low']
@@ -218,7 +218,7 @@ def evaluate_market_data(df, ticker):
     price_std = df['Close'].rolling(window=5).std().iloc[-1]
     s8 = price_std < 0.0035
 
-    # Execute all 8 sequential modular steps for high precision
+    # Execute all 8 sequential modular steps
     filters_passed = all([s1, s2, s3, s4, s5, s6, s7, s8])
 
     if filters_passed:
@@ -249,7 +249,8 @@ def evaluate_trade_outcome(trade_data, entry_time):
     asset = trade_data["asset"]
 
     try:
-        df_after = yf.download(tickers=ticker, period="1d", interval="1m", progress=False)
+        ticker_obj = yf.Ticker(ticker)
+        df_after = ticker_obj.history(period="1d", interval="1m")
         if df_after.empty:
             return
 
@@ -299,7 +300,7 @@ def evaluate_trade_outcome(trade_data, entry_time):
 # ==========================================
 def trading_bot_loop():
     global signal_counter
-    print("🚀 PT-7 AI Trading Bot Thread Started & Active!")
+    print("🚀 PT-7 AI Trading Bot Thread Started with Optimized Live Feed!")
     last_signal_time = {}
 
     while True:
@@ -311,7 +312,9 @@ def trading_bot_loop():
                     if (now_bd - last_signal_time[pair]).total_seconds() < 300:
                         continue
 
-                df = yf.download(tickers=pair, period="1d", interval="1m", progress=False)
+                # Fast live ticker history fetch
+                ticker_obj = yf.Ticker(pair)
+                df = ticker_obj.history(period="2d", interval="1m")
                 if df.empty:
                     continue
 
@@ -355,7 +358,7 @@ def trading_bot_loop():
                     )
 
                     send_telegram_msg(signal_msg)
-                    print(f"⚡ PT-7 SIGNAL #{signal_counter} SENT: {formatted_asset} - {trade_data['signal']}")
+                    print(f"⚡ PT-7 LIVE SIGNAL #{signal_counter} SENT: {formatted_asset} - {trade_data['signal']}")
 
                     eval_thread = threading.Thread(
                         target=evaluate_trade_outcome, 
@@ -364,7 +367,7 @@ def trading_bot_loop():
                     )
                     eval_thread.start()
 
-            time.sleep(10)
+            time.sleep(5)
 
         except Exception as e:
             print(f"❌ Error in Bot Loop: {e}")
@@ -377,4 +380,5 @@ bot_thread = threading.Thread(target=trading_bot_loop, daemon=True)
 bot_thread.start()
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=10000)
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port)
