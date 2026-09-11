@@ -111,9 +111,14 @@ def send_telegram_msg(message):
     }
     try:
         res = requests.post(url, json=payload, timeout=10)
-        return res.json()
+        data = res.json()
+        if not data.get("ok"):
+            print(f"❌ Telegram API Error Response: {data}")
+        else:
+            print("✅ Telegram Message Sent Successfully!")
+        return data
     except Exception as e:
-        print(f"❌ Telegram Send Error: {e}")
+        print(f"❌ Telegram Send Exception: {e}")
         return None
 
 # ==========================================
