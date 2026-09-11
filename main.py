@@ -29,7 +29,7 @@ def home():
 # ⚙️ CONFIGURATION & TELEGRAM SETTINGS
 # ==========================================
 TELEGRAM_BOT_TOKEN = "8654325516:AAF0CdoX7BJO51IVP5j4GXhWt7rKcFHoD2o"
-TELEGRAM_CHAT_ID = "6106490095"                   # আপনার চ্যানেলের চ্যাট আইডি সঠিক কি না?
+TELEGRAM_CHAT_ID = "6106490095"
 
 PAIRS = [
     "EURUSD=X", "GBPUSD=X", "USDJPY=X", "AUDUSD=X", "USDCAD=X",
@@ -90,13 +90,42 @@ def generate_performance_analytics():
         return "📊 *Performance Memory:* No trades logged in current session."
 
     total_trades = len(rows)
-    wins = sum(1 for r in rows if "WIN" in r[1])
-    losses = sum(1 for r in rows if "LOSS" in r[1])
-    overall_winrate = (wins / total_trades) * 100 if total_trades > 0 else 0
+    overall_wins = sum(1 for r in rows if "WIN" in r[1])
+    overall_losses = sum(1 for r in rows if "LOSS" in r[1])
+    overall_winrate = (overall_wins / total_trades) * 100 if total_trades > 0 else 0
 
-    report = f"📊 *Institutional AI Memory Report*\n"
+    # Group statistics by strategy
+    strategy_stats = {}
+    for strat_id, result in rows:
+        if strat_id not in strategy_stats:
+            strategy_stats[strat_id] = {"total": 0, "wins": 0, "losses": 0}
+        strategy_stats[strat_id]["total"] += 1
+        if "WIN" in result:
+            strategy_stats[strat_id]["wins"] += 1
+        else:
+            strategy_stats[strat_id]["losses"] += 1
+
+    report = f"📊 *INSTITUTIONAL AI MEMORY REPORT*\n"
+    report += f"━━━━━━━━━━━━━━━━━━━━━\n"
+    report += f"📈 *OVERALL PERFORMANCE:*\n"
     report += f"• Total Executions: `{total_trades}`\n"
-    report += f"• Win Rate: `{overall_winrate:.1f}%` (Wins: {wins} | Losses: {losses})\n"
+    report += f"• Win Rate: `{overall_winrate:.1f}%` (Wins: {overall_wins} | Losses: {overall_losses})\n\n"
+    report += f"🧠 *STRATEGY BREAKDOWN:*\n"
+
+    for strat, data in strategy_stats.items():
+        st_total = data["total"]
+        st_wins = data["wins"]
+        st_losses = data["losses"]
+        st_wr = (st_wins / st_total) * 100 if st_total > 0 else 0
+        
+        status_icon = "🟢" if st_wr >= 60 else "🔴"
+        
+        report += (
+            f"\n{status_icon} *{strat}*\n"
+            f"   • Total Trades: `{st_total}`\n"
+            f"   • Win Rate: `{st_wr:.1f}%` (W: `{st_wins}` | L: `{st_losses}`)\n"
+        )
+
     return report
 
 # ==========================================
@@ -114,11 +143,9 @@ def send_telegram_msg(message):
         data = res.json()
         if not data.get("ok"):
             print(f"❌ Telegram API Error Response: {data}")
-        else:
-            print("✅ Telegram Message Sent Successfully!")
         return data
     except Exception as e:
-        print(f"❌ Telegram Send Exception: {e}")
+        print(f"❌ Telegram Send Error: {e}")
         return None
 
 # ==========================================
@@ -138,7 +165,6 @@ def evaluate_market_data(df, ticker):
     if len(df) < 50:
         return None
 
-    # Handle MultiIndex columns if present
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
 
@@ -166,39 +192,39 @@ def evaluate_market_data(df, ticker):
     strategy_id = ""
     setup_name = ""
 
-    # Strategy 1: Trend Momentum Scalp (EMA 8/21 Cross + HTF Trend + RSI Filter)
+    # Strategy 1: Trend Momentum Scalp
     if ema8.iloc[-1] > ema21.iloc[-1] and ema8.iloc[-2] <= ema21.iloc[-2] and c_curr > ema50.iloc[-1] and rsi_val > 52:
         signal = "BUY (CALL / UP)"
-        strategy_id = "#STRATEGY_1: Trend Momentum Scalp"
+        strategy_id = "Strategy 1 (EMA Cross)"
         setup_name = f"EMA8/21 Bull Cross + HTF Trend + RSI ({rsi_val:.1f})"
         win_score = 88
     elif ema8.iloc[-1] < ema21.iloc[-1] and ema8.iloc[-2] >= ema21.iloc[-2] and c_curr < ema50.iloc[-1] and rsi_val < 48:
         signal = "SELL (PUT / DOWN)"
-        strategy_id = "#STRATEGY_1: Trend Momentum Scalp"
+        strategy_id = "Strategy 1 (EMA Cross)"
         setup_name = f"EMA8/21 Bear Cross + HTF Trend + RSI ({rsi_val:.1f})"
         win_score = 88
 
     # Strategy 2: Institutional Engulfing Breakout
     elif c_prev < o_prev and c_curr > o_curr and c_curr > o_prev and (c_curr - o_curr) > (o_prev - c_prev) * 1.2 and rsi_val > 50:
         signal = "BUY (CALL / UP)"
-        strategy_id = "#STRATEGY_4: Engulfing Breakout"
+        strategy_id = "Strategy 2 (Engulfing)"
         setup_name = "Bullish Institutional Engulfing Pattern"
         win_score = 87
     elif c_prev > o_prev and c_curr < o_curr and c_curr < o_prev and (o_curr - c_curr) > (c_prev - o_prev) * 1.2 and rsi_val < 50:
         signal = "SELL (PUT / DOWN)"
-        strategy_id = "#STRATEGY_4: Engulfing Breakout"
+        strategy_id = "Strategy 2 (Engulfing)"
         setup_name = "Bearish Institutional Engulfing Pattern"
         win_score = 87
 
     # Strategy 3: Micro S/R Level Bounce
     elif l_curr <= low.iloc[-20:-1].min() and c_curr > o_curr and rsi_val < 35:
         signal = "BUY (CALL / UP)"
-        strategy_id = "#STRATEGY_3: Micro S/R Level Bounce"
+        strategy_id = "Strategy 3 (S/R Bounce)"
         setup_name = f"Support Zone Rejection at {l_curr:.5f}"
         win_score = 86
     elif h_curr >= high.iloc[-20:-1].max() and c_curr < o_curr and rsi_val > 65:
         signal = "SELL (PUT / DOWN)"
-        strategy_id = "#STRATEGY_3: Micro S/R Level Bounce"
+        strategy_id = "Strategy 3 (S/R Bounce)"
         setup_name = f"Resistance Zone Rejection at {h_curr:.5f}"
         win_score = 86
 
@@ -219,9 +245,7 @@ def evaluate_market_data(df, ticker):
 # ⏱️ RESULT TRACKER & OUTCOME EVALUATOR
 # ==========================================
 def evaluate_trade_outcome(trade_data, entry_time):
-    # Wait for expiry candle (1 minute) + buffer time
     time.sleep(65)
-    
     ticker = trade_data["raw_ticker"]
     entry_p = trade_data["entry_price"]
     signal = trade_data["signal"]
@@ -256,12 +280,12 @@ def evaluate_trade_outcome(trade_data, entry_time):
             f"🎯 *TRADE OUTCOME FEEDBACK*\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
             f"🪙 *ASSET:* `{asset}`\n"
+            f"🎯 *STRATEGY:* `{trade_data['strategy_id']}`\n"
             f"📊 *RESULT:* `{result_str}`\n"
             f"📈 *Entry:* `{entry_p:.5f}` ➔ *Exit:* `{exit_p:.5f}`\n\n"
             f"{generate_performance_analytics()}"
         )
         send_telegram_msg(feedback_msg)
-        print(f"✅ Trade Result Feedback Sent: {asset} - {result_str}")
 
     except Exception as e:
         print(f"❌ Error verifying trade outcome: {e}")
@@ -280,7 +304,6 @@ def trading_bot_loop():
             print(f"[{current_time_str}] 🔍 Scanning Forex Pairs ({len(PAIRS)} Assets)...")
 
             for pair in PAIRS:
-                # Cooldown prevention (5 mins per pair)
                 if pair in last_signal_time:
                     if (now_bd - last_signal_time[pair]).total_seconds() < 300:
                         continue
@@ -305,8 +328,7 @@ def trading_bot_loop():
                         f"⏰ *TIMING & EXPIRY:*\n"
                         f"• Entry Time: `{entry_time_str} (BD Time)`\n"
                         f"• Candle Time: `1 Minute`\n"
-                        f"• Exit / Expiry: `{exit_time_str}`\n"
-                        f"• Preparation: `59 Seconds`\n\n"
+                        f"• Exit / Expiry: `{exit_time_str}`\n\n"
                         f"📊 *DETAILS:*\n"
                         f"• Setup: `{trade_data['setup']}`\n"
                         f"• Win Score: `{trade_data['score']}% / 100`\n"
@@ -316,7 +338,6 @@ def trading_bot_loop():
                     send_telegram_msg(signal_msg)
                     print(f"⚡ SIGNAL GENERATED: {trade_data['asset']} - {trade_data['signal']}")
 
-                    # Start outcome evaluation in a separate thread
                     eval_thread = threading.Thread(
                         target=evaluate_trade_outcome, 
                         args=(trade_data, now_bd), 
@@ -324,7 +345,7 @@ def trading_bot_loop():
                     )
                     eval_thread.start()
 
-            time.sleep(10)  # Scan every 10 seconds
+            time.sleep(10)
 
         except Exception as e:
             print(f"❌ Error in Bot Loop: {e}")
@@ -333,7 +354,6 @@ def trading_bot_loop():
 # ==========================================
 # 🚀 GLOBAL THREAD INITIATION FOR GUNICORN
 # ==========================================
-# Runs automatically when imported by Gunicorn
 bot_thread = threading.Thread(target=trading_bot_loop, daemon=True)
 bot_thread.start()
 
